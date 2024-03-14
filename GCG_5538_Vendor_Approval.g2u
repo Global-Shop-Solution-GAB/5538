@@ -1,0 +1,304 @@
+﻿Program.Sub.ScreenSU.Start
+Gui.FormVend_Approval..Create
+Gui.FormVend_Approval..Caption("Vendor Approval")
+Gui.FormVend_Approval..Size(15360,10890)
+Gui.FormVend_Approval..MinX(0)
+Gui.FormVend_Approval..MinY(0)
+Gui.FormVend_Approval..Position(0,0)
+Gui.FormVend_Approval..BackColor(-2147483633)
+Gui.FormVend_Approval..MousePointer(0)
+Gui.FormVend_Approval..Event(UnLoad,FormVend_Approval_UnLoad)
+Gui.FormVend_Approval.GsGridControlVend.Create(GsGridControl)
+Gui.FormVend_Approval.GsGridControlVend.Size(15015,9585)
+Gui.FormVend_Approval.GsGridControlVend.Position(120,105)
+Gui.FormVend_Approval.GsGridControlVend.Event(RowCellClick,GsGridControlVend_RowCellClick)
+Gui.FormVend_Approval.cmdSave.Create(Button)
+Gui.FormVend_Approval.cmdSave.Size(855,375)
+Gui.FormVend_Approval.cmdSave.Position(105,9840)
+Gui.FormVend_Approval.cmdSave.Caption("Save")
+Program.Sub.ScreenSU.End
+
+Program.Sub.Preflight.Start
+V.Global.bUpdate.Declare(Boolean,False)
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+F.Intrinsic.Control.Try
+	V.Local.sError.Declare(String,"")
+	
+	'checking if user has acess to update Vendor if False then user will only be able to view data.
+	F.Global.Security.CheckUserAccessIPM(2,1,V.Global.bUpdate)
+
+	F.Intrinsic.Control.CallSub(Get_Data)
+	F.Intrinsic.Control.CallSub(Set_Properties)
+	
+	Gui.FormVend_Approval..Show
+	
+	F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+		F.Intrinsic.String.Build("Project: {0}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}","GCG_5538_Vendor_Approval.g2u",V.Ambient.NewLine,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Local.sError)
+		F.Intrinsic.UI.Msgbox(V.Local.sError)
+		F.Intrinsic.Control.CallSub(FormVend_Approval_UnLoad)
+	F.Intrinsic.Control.EndIf
+Function.Intrinsic.Control.EndTry
+Program.Sub.Main.End
+
+Program.Sub.FormVend_Approval_UnLoad.Start
+F.Intrinsic.Control.Try
+	V.Local.sError.Declare(String,"")
+	V.Local.sReturn.Declare(String,"")
+	V.Local.sFile.Declare(String,"")
+	V.Local.sDir.Declare(String,"")
+	V.Local.bRet.Declare(Boolean,False)
+	
+	'check if connection is still open if so close connection
+	F.Intrinsic.Control.If(V.ODBC.Con.Exists,=,1)
+		F.ODBC.Connection!Con.Close
+	F.Intrinsic.Control.EndIf
+	
+	F.Intrinsic.String.Build("{0}\Custom\5538",V.Caller.GlobalDir,V.Local.sDir)
+	F.Intrinsic.String.Build("{0}\{1}_5538_VendApprove.txt",V.Local.sDir,V.Caller.User,V.Local.sFile)
+	
+	F.Intrinsic.File.DirExists(V.Local.sDir,V.Local.bRet)
+	
+	F.Intrinsic.Control.If(V.Local.bRet,=,False)
+		F.Intrinsic.File.CreateDir(V.Local.sDir)
+	F.Intrinsic.Control.EndIf
+	
+	Gui.FormVend_Approval.GsGridControlVend.Serialize("GVendApprove",V.Local.sReturn)
+	
+	F.Intrinsic.File.String2File(V.Local.sFile,V.Local.sReturn)
+	
+	F.Intrinsic.Control.End
+	
+	F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+		F.Intrinsic.String.Build("Project: {0}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}","GCG_5538_Vendor_Approval.g2u",V.Ambient.NewLine,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Local.sError)
+		F.Intrinsic.UI.Msgbox(V.Local.sError)
+		F.Intrinsic.Control.End
+	F.Intrinsic.Control.EndIf
+Function.Intrinsic.Control.EndTry
+Program.Sub.FormVend_Approval_UnLoad.End
+
+Program.Sub.Get_Data.Start
+F.Intrinsic.Control.Try
+	V.Local.sError.Declare(String,"")
+	V.Local.sSql.Declare(String,"")
+	
+	V.Local.sSql.Set("Select a.Vendor, Name_Vendor, ISO_Status, IF(ISO_Cert_Date = '1900-01-01',Null,ISO_Cert_Date) as ISO_Cert_Date, Approved_Suppl, IF(Approved_Sup_Dt = '1900-01-01',null,Approved_Sup_Dt) as Approved_Sup_Dt From V_Vendor_Master a Left Join V_Vendor_Addl b on a.Vendor = b.Vendor")
+	
+	F.ODBC.Connection!Con.OpenCompanyConnection
+	
+	F.Data.DataTable.CreateFromSQL("TempVendApprove","con",V.Local.sSql,True)
+	
+	V.Local.sSql.Set("Select Vendor, ISO_Expiration, App_Expiration From GCG_5538_Vendor_Exp")
+	F.Data.DataTable.CreateFromSQL("Exp","con",V.Local.sSql,True)
+	
+	F.Data.Linq.Join("LeftJoin","DataTable","TempVendApprove*!*A","DataTable","Exp*!*B","A.Vendor = B.Vendor","A.Vendor*!*A.Name_Vendor*!*A.ISO_Status*!*A.ISO_Cert_Date*!*B.ISO_Expiration*!*A.Approved_Suppl*!*A.Approved_Sup_Dt*!*B.App_Expiration","","","","VendApprove",True)
+	F.Data.DataTable.AddColumn("VendApprove","Scope","String")
+	F.Intrinsic.String.Build("Select Vendor, Scope From GCG_5538_Vendor_Exp","",V.Local.sSql)
+	F.Data.Dictionary.CreateFromSQL("Scope","con",V.Local.sSql)
+	F.Data.Dictionary.SetDefaultReturn("Scope"," ")
+	F.Data.DataTable.FillFromDictionary("VendApprove","Scope","Vendor","Scope")
+	F.Data.Dictionary.Close("Scope")
+	F.Data.DataTable.Close("TempVendApprove")
+	F.Data.DataTable.Close("Exp")
+	
+	F.ODBC.Connection!Con.Close
+	
+	F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+		F.Intrinsic.String.Build("Project: {0}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}","GCG_5538_Vendor_Approval.g2u",V.Ambient.NewLine,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Local.sError)
+		F.Intrinsic.UI.Msgbox(V.Local.sError)
+		F.Intrinsic.Control.CallSub(FormVend_Approval_UnLoad)
+	F.Intrinsic.Control.EndIf
+Function.Intrinsic.Control.EndTry
+Program.Sub.Get_Data.End
+
+Program.Sub.Set_Properties.Start
+F.Intrinsic.Control.Try
+	V.Local.sError.Declare(String,"")
+	V.Local.sFile.Declare(String,"")
+	V.Local.bRet.Declare(Boolean,False)
+	V.Local.sReturn.Declare(String,"")
+
+'	F.Intrinsic.Control.If(V.Global.bUpdate,=,True)
+'		Gui.FormVend_Approval.GsGridControlVend.Size(15015,9585)
+'		Gui.FormVend_Approval.cmdSave.Visible(True)
+'	F.Intrinsic.Control.Else
+		Gui.FormVend_Approval.GsGridControlVend.Size(15015,10035)
+		Gui.FormVend_Approval.cmdSave.Visible(False)
+'	F.Intrinsic.Control.EndIf
+	
+	Gui.FormVend_Approval.GsGridControlVend.Anchor(15)
+	Gui.FormVend_Approval.cmdSave.Anchor(6)
+	
+	Gui.FormVend_Approval.GsGridControlVend.AddGridviewFromDatatable("GVendApprove","VendApprove")
+	
+	Gui.FormVend_Approval.GsGridControlVend.SetGridviewProperty("GVendApprove","OptionsSelectionEnableAppearanceFocusedRow",False)
+	Gui.FormVend_Approval.GsGridControlVend.SetGridviewProperty("GVendApprove","Enableappearanceoddrow",True)
+	
+	Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","Vendor","ReadOnly",True)
+	Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","Vendor","AllowEdit",False)
+'	Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","Vendor","HeaderBackColor","Green")
+'	Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","Vendor","HeaderForeColor","White")
+	Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","Vendor","MaxWidth",60)
+	Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","Vendor","MinWidth",60)
+	Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","Name_Vendor","ReadOnly",True)
+	Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","Name_Vendor","AllowEdit",False)
+'	Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","Name_Vendor","HeaderBackColor","Green")
+'	Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","Name_Vendor","HeaderForeColor","White")
+	Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","Name_Vendor","Caption","Vendor Name")
+	Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","Name_Vendor","MaxWidth",200)
+	Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","Name_Vendor","MinWidth",200)
+	Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","ISO_Status","ReadOnly",True)
+	Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","ISO_Status","AllowEdit",False)
+'	Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","ISO_Status","HeaderBackColor","Green")
+'	Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","ISO_Status","HeaderForeColor","White")
+	Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","ISO_Status","Caption","Certification Status")
+	Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","ISO_Status","MaxWidth",95)
+	Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","ISO_Status","MinWidth",95)
+	Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","ISO_Status","CellHAlignment","Center")
+'	F.Intrinsic.Control.If(V.Global.bUpdate,=,True)
+'		Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","ISO_Cert_Date","ReadOnly",False)
+'		Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","ISO_Cert_Date","AllowEdit",True)
+'		Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","Approved_Sup_Dt","ReadOnly",False)
+'		Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","Approved_Sup_Dt","AllowEdit",True)
+'	F.Intrinsic.Control.Else
+		Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","ISO_Cert_Date","ReadOnly",True)
+		Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","ISO_Cert_Date","AllowEdit",False)
+		Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","ISO_Cert_Date","Visible",False)
+		Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","Approved_Sup_Dt","ReadOnly",True)
+		Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","Approved_Sup_Dt","AllowEdit",False)
+		Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","Approved_Sup_Dt","Visible",False)
+'	F.Intrinsic.Control.EndIf
+'	Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","ISO_Cert_Date","HeaderBackColor","Green")
+'	Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","ISO_Cert_Date","HeaderForeColor","White")
+	Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","ISO_Cert_Date","Visible",False)
+	Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","ISO_Cert_Date","DisplayCustomDatetime","d")
+	Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","ISO_Cert_Date","MaxWidth",135)
+	Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","ISO_Cert_Date","MinWidth",135)
+	Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","ISO_Expiration","ReadOnly",True)
+	Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","ISO_Expiration","AllowEdit",False)
+'	Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","ISO_Expiration","HeaderBackColor","Green")
+'	Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","ISO_Expiration","HeaderForeColor","White")
+	Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","ISO_Expiration","Caption","Certification Expiration Date")
+	Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","ISO_Expiration","DisplayCustomDatetime","d")
+	Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","ISO_Expiration","MaxWidth",135)
+	Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","ISO_Expiration","MinWidth",135)
+	Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","ISO_Expiration","Visible",False)
+	Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","Approved_Suppl","ReadOnly",True)
+	Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","Approved_Suppl","AllowEdit",False)
+'	Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","Approved_Suppl","HeaderBackColor","Green")
+'	Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","Approved_Suppl","HeaderForeColor","White")
+	Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","Approved_Suppl","Caption","Vendor Approved")
+	Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","Approved_Suppl","MaxWidth",95)
+	Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","Approved_Suppl","MinWidth",95)
+	Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","Approved_Suppl","CellHAlignment","Center")
+'	Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","Approved_Sup_Dt","HeaderBackColor","Green")
+'	Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","Approved_Sup_Dt","HeaderForeColor","White")
+	Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","Approved_Sup_Dt","Caption","Vendor Approved Date")
+	Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","Approved_Sup_Dt","DisplayCustomDatetime","d")
+	Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","Approved_Sup_Dt","MaxWidth",135)
+	Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","Approved_Sup_Dt","MinWidth",135)
+	Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","Approved_Sup_Dt","Visible",False)
+	Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","App_Expiration","ReadOnly",True)
+	Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","App_Expiration","AllowEdit",False)
+'	Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","App_Expiration","HeaderBackColor","Green")
+'	Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","App_Expiration","HeaderForeColor","White")
+	Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","App_Expiration","Caption","Approved Expiration Date")
+	Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","App_Expiration","DisplayCustomDatetime","d")
+	Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","App_Expiration","MaxWidth",135)
+	Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","App_Expiration","MinWidth",135)
+	Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","App_Expiration","Visible",False)
+	Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","Scope","ReadOnly",True)
+	Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","Scope","AllowEdit",False)
+'	Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","Scope","HeaderBackColor","Green")
+'	Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","Scope","HeaderForeColor","White")
+	Gui.FormVend_Approval.GsGridControlVend.SetColumnProperty("GVendApprove","Scope","Caption","Scope")	
+	
+'	F.Intrinsic.String.Build("[APP_EXPIRATION] < #{0}#",V.Ambient.Date,V.Local.sReturn)
+	Gui.FormVend_Approval.GsGridControlVend.AddStyleFormatCondition("GVendApprove","Approved_Suppl","ParentRed","NotEqual","Y")
+	Gui.FormVend_Approval.GsGridControlVend.SetStyleFormatConditionProperty("GVendApprove","Approved_Suppl","ParentRed","BackColor","#fd6464")
+	
+	Gui.FormVend_Approval.GsGridControlVend.AddStyleFormatCondition("GVendApprove","ISO_Status","ParentRed","NotEqual","Y")
+	Gui.FormVend_Approval.GsGridControlVend.SetStyleFormatConditionProperty("GVendApprove","ISO_Status","ParentRed","BackColor","#fd6464")
+	
+'	F.Intrinsic.String.Build("[APP_EXPIRATION] >= #{0}#",V.Ambient.Date,V.Local.sReturn)
+	Gui.FormVend_Approval.GsGridControlVend.AddStyleFormatCondition("GVendApprove","Approved_Suppl","ParentGreen","Equal","Y")
+	Gui.FormVend_Approval.GsGridControlVend.SetStyleFormatConditionProperty("GVendApprove","Approved_Suppl","ParentGreen","BackColor","#64fd64")
+	
+	Gui.FormVend_Approval.GsGridControlVend.AddStyleFormatCondition("GVendApprove","ISO_Status","ParentGreen","Equal","Y")
+	Gui.FormVend_Approval.GsGridControlVend.SetStyleFormatConditionProperty("GVendApprove","ISO_Status","ParentGreen","BackColor","#64fd64")
+	
+	Gui.FormVend_Approval.GsGridControlVend.MainView("GVendApprove")
+	
+	F.Intrinsic.String.Build("{0}\Custom\5538\{1}_5538_VendApprove.txt",V.Caller.GlobalDir,V.Caller.User,V.Local.sFile)
+
+	F.Intrinsic.File.Exists(V.Local.sFile,V.Local.bRet)
+	F.Intrinsic.Control.If(V.Local.bRet)
+		F.Intrinsic.File.File2String(V.Local.sFile,V.Local.sReturn)
+		Gui.FormVend_Approval.GsGridControlVend.Deserialize(V.Local.sReturn)
+	F.Intrinsic.Control.EndIf
+	
+	F.Intrinsic.Control.If(V.Caller.GSSVersion,>,2020.1)
+		Gui.FormVend_Approval.GsGridControlVend.SetGridviewProperty("GVendApprove","ShowConditionalFormattingItem",True)
+	F.Intrinsic.Control.EndIf
+	
+	F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+		F.Intrinsic.String.Build("Project: {0}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}","GCG_5538_Vendor_Approval.g2u",V.Ambient.NewLine,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Local.sError)
+		F.Intrinsic.UI.Msgbox(V.Local.sError)
+		F.Intrinsic.Control.CallSub(FormVend_Approval_UnLoad)
+	F.Intrinsic.Control.EndIf
+Function.Intrinsic.Control.EndTry
+Program.Sub.Set_Properties.End
+
+Program.Sub.GsGridControlVend_RowCellClick.Start
+F.Intrinsic.Control.Try
+	V.Local.sError.Declare(String,"")
+	V.Local.sFile.Declare(String,"")
+	V.Local.iRet.Declare(Long,0)
+	V.Local.bRet.Declare(Boolean,False)
+	V.Local.bView.Declare(Boolean,False)
+
+	F.Intrinsic.Control.SelectCase(V.Args.Column.UCase)
+		F.Intrinsic.Control.Case("VENDOR")
+			F.Intrinsic.Control.If(V.Global.bUpdate)
+				F.Global.Callwrapper.New("Vend","Accounting.AccountsPayable.VendorMaintenanceOpenVendor")
+				F.Global.Callwrapper.SetProperty("Vend","VendorNumber",V.Args.CellValue)
+				F.Global.CallWrapper.Run("Vend")
+			F.Intrinsic.Control.Else
+				F.Global.Security.CheckUserAccessIPM(3,0,V.Local.bView)
+				F.Intrinsic.Control.If(V.Local.bView)
+					F.Global.Callwrapper.New("Vend","Accounting.AccountsPayable.VendorMaintenanceViewVendor")
+					F.Global.Callwrapper.SetProperty("Vend","VendorNumber",V.Args.CellValue)
+					F.Global.CallWrapper.Run("Vend")
+				F.Intrinsic.Control.EndIf
+			F.Intrinsic.Control.EndIf
+			
+	F.Intrinsic.Control.EndSelect
+	
+	F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+		F.Intrinsic.String.Build("Project: {0}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}","GCG_5538_Vendor_Approval.g2u",V.Ambient.NewLine,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Local.sError)
+		F.Intrinsic.UI.Msgbox(V.Local.sError)
+		F.Intrinsic.Control.CallSub(FormVend_Approval_UnLoad)
+	F.Intrinsic.Control.EndIf
+Function.Intrinsic.Control.EndTry	
+Program.Sub.GsGridControlVend_RowCellClick.End
+
+Program.Sub.Comments.Start
+${$5$}$2.0.0.0$}$2
+${$6$}$rking$}$20231005072804393$}$QNdZLVy4bWuiWa9jh1ZTiKHvMPldSPXe/KTK7teTLvJJwFloIn/i6FLbNgTY13hOqsBSo1V8Mpw=
+Program.Sub.Comments.End
