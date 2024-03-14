@@ -1,0 +1,255 @@
+Program.Sub.Preflight.Start
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+F.Intrinsic.Control.Try
+	V.Local.sError.Declare(String,"")
+
+	
+	'getting vendorlist
+	F.Intrinsic.Control.CallSub(Get_Data)
+	'set filter and create string of vendors with iso and vend approval expiration dates are with 60 days.
+	F.Intrinsic.Control.CallSub(Process_Data)
+	'get list of vendors who expiration date is expired.  and update iso cert and vendor approval flag in gss.
+	F.Intrinsic.Control.CallSub(Update_Vendor)
+	'send email with upcoming vendor that are about to expire as well as ones that has expired.
+	F.Intrinsic.Control.CallSub(Send_Email,"ISO",V.Args.ISO,"App",V.Args.App,"ISOExp",V.Args.ISOExp,"AppExp",V.Args.AppExp)
+	
+	F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+		F.Intrinsic.String.Build("Project: {0}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}","",V.Ambient.NewLine,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Local.sError)
+		F.Intrinsic.UI.Msgbox(V.Local.sError)
+		F.Intrinsic.Control.CallSub(Exit)
+	F.Intrinsic.Control.EndIf
+Function.Intrinsic.Control.EndTry
+Program.Sub.Main.End
+
+Program.Sub.Exit.Start
+F.Intrinsic.Control.Try
+	V.Local.sError.Declare(String,"")
+
+	F.Intrinsic.Control.End
+	
+	F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+		F.Intrinsic.String.Build("Project: {0}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}","",V.Ambient.NewLine,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Local.sError)
+		F.Intrinsic.UI.Msgbox(V.Local.sError)
+		F.Intrinsic.Control.End
+	F.Intrinsic.Control.EndIf
+Function.Intrinsic.Control.EndTry
+Program.Sub.Exit.End
+
+Program.Sub.Get_Data.Start
+F.Intrinsic.Control.Try
+	V.Local.sError.Declare(String,"")
+	V.Local.sSql.Declare(String,"")
+	
+	F.Intrinsic.String.Build("Select Vendor, ISO_Expiration, App_Expiration From GCG_5538_Vendor_Exp Order by Vendor","",V.Local.sSql)
+	
+	F.ODBC.Connection!Con.OpenCompanyConnection
+	F.Data.DataTable.CreateFromSQL("Vend","con",V.Local.sSql,True)
+	F.ODBC.Connection!Con.Close
+	
+	F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+		F.Intrinsic.String.Build("Project: {0}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}","",V.Ambient.NewLine,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Local.sError)
+		F.Intrinsic.UI.Msgbox(V.Local.sError)
+		F.Intrinsic.Control.CallSub(Exit)
+	F.Intrinsic.Control.EndIf
+Function.Intrinsic.Control.EndTry
+Program.Sub.Get_Data.End
+
+Program.Sub.Process_Data.Start
+F.Intrinsic.Control.Try
+	V.Local.sError.Declare(String,"")
+	V.Local.dDate.Declare(Date)
+	V.Local.sDate.Declare
+	V.Local.sFilter.Declare(String,"")
+	V.Local.sISO.Declare(String,"")
+	V.Local.sApp.Declare(String,"")
+	V.Local.dCurDate.Declare(Date)
+	V.Local.sCurDate.Declare
+	
+	F.Intrinsic.Date.DateAdd("D",60,V.Ambient.Date,V.Local.dDate)
+	V.Local.dCurDate.Set(V.Ambient.Date)
+	F.Intrinsic.String.Format(V.Local.dCurDate,"YYYY-MM-DD",V.Local.sCurDate)
+	F.Intrinsic.String.Format(V.Local.dDate,"YYYY-MM-DD",V.Local.sDate)
+	
+	
+	F.Intrinsic.String.Build("ISO_Expiration <= #{0}# and ISO_Expiration >= #{1}#",V.Local.sDate,V.Local.sCurDate,V.Local.sFilter)
+	
+	F.Data.DataView.Create("Vend","ISOVend",22,V.Local.sFilter,"")
+	
+	F.Intrinsic.String.Build("App_Expiration <= #{0}# and App_Expiration >= #{1}#",V.Local.sDate,V.Local.sCurDate,V.Local.sFilter)
+	
+	F.Data.DataView.Create("Vend","AppVend",22,V.Local.sFilter,"")
+	
+	F.Data.DataView.ToString("Vend","ISOVend","Vendor*!*ISO_Expiration",":",",",V.Local.sISO)
+	F.Data.DataView.ToString("Vend","AppVend","Vendor*!*App_Expiration",":",",",V.Local.sApp)
+	
+	F.Intrinsic.String.RegExReplace(V.Local.sISO,"[0-9]{1,2}:[0-9]{1,2}:[0-9]{2} (AM|PM)","",true,true,V.Local.sISO)
+	F.Intrinsic.String.RegExReplace(V.Local.sApp,"[0-9]{1,2}:[0-9]{1,2}:[0-9]{2} (AM|PM)","",true,true,V.Local.sApp)
+	
+	F.Intrinsic.Variable.AddRV("ISO",V.Local.sISO)
+	F.Intrinsic.Variable.AddRV("App",V.Local.sApp)
+	
+	F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+		F.Intrinsic.String.Build("Project: {0}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}","",V.Ambient.NewLine,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Local.sError)
+		F.Intrinsic.UI.Msgbox(V.Local.sError)
+		F.Intrinsic.Control.CallSub(Exit)
+	F.Intrinsic.Control.EndIf
+Function.Intrinsic.Control.EndTry
+Program.Sub.Process_Data.End
+
+Program.Sub.Update_Vendor.Start
+F.Intrinsic.Control.Try
+	V.Local.sError.Declare(String,"")
+	V.Local.dDate.Declare(Date)
+	V.Local.sDate.Declare
+	V.Local.sFilter.Declare(String,"")
+	V.Local.sISO.Declare(String,"")
+	V.Local.sApp.Declare(String,"")
+	
+	V.Local.dDate.Set(V.Ambient.Date)
+	F.Intrinsic.String.Format(V.Local.dDate,"YYYY-MM-DD",V.Local.sDate)
+	
+	
+	F.Intrinsic.String.Build("ISO_Expiration < #{0}#",V.Local.sDate,V.Local.sFilter)
+	
+	F.Data.DataView.SetFilter("Vend","ISOVend",V.Local.sFilter)
+	
+	F.Intrinsic.String.Build("App_Expiration < #{0}#",V.Local.sDate,V.Local.sFilter)
+	
+	F.Data.DataView.SetFilter("Vend","AppVend",V.Local.sFilter)
+	
+	F.Data.DataView.ToDataTable("Vend","ISOVend","VendApp")
+	F.Data.DataView.ToDataTable("Vend","AppVend","VendISO")
+	
+	F.Data.DataView.ToString("Vend","ISOVend","Vendor",":",",",V.Local.sISO)
+	F.Data.DataView.ToString("Vend","AppVend","Vendor",":",",",V.Local.sApp)
+	
+	F.Data.DataTable.RemoveColumn("VendApp","ISO_Expiration")
+	F.Data.DataTable.RemoveColumn("VendApp","App_Expiration")
+	F.Data.DataTable.AddColumn("VendApp","APPROVED_SUPPL","String")
+	
+	F.Data.DataTable.RemoveColumn("VendISO","ISO_Expiration")
+	F.Data.DataTable.RemoveColumn("VendISO","App_Expiration")
+	F.Data.DataTable.AddColumn("VendISO","ISO_Status","String")
+	
+	F.ODBC.Connection!Con.OpenCompanyConnection
+	
+	F.Data.DataTable.SaveToDB("VendApp","con","V_Vendor_Addl","Vendor",256,"Vendor@!@Vendor*!*Approved_Suppl@!@Approved_Suppl")
+	F.Data.DataTable.SaveToDB("VendISO","con","V_Vendor_Addl","Vendor",256,"Vendor@!@Vendor*!*ISO_Status@!@ISO_Status")
+	
+	F.Intrinsic.Variable.AddRV("ISOExp",V.Local.sISO)
+	F.Intrinsic.Variable.AddRV("AppExp",V.Local.sApp)
+	
+	F.ODBC.Connection!Con.Close
+	
+	F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+		F.Intrinsic.String.Build("Project: {0}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}","",V.Ambient.NewLine,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Local.sError)
+		F.Intrinsic.UI.Msgbox(V.Local.sError)
+		F.Intrinsic.Control.CallSub(Exit)
+	F.Intrinsic.Control.EndIf
+Function.Intrinsic.Control.EndTry
+Program.Sub.Update_Vendor.End
+
+Program.Sub.Send_Email.Start
+F.Intrinsic.Control.Try
+	V.Local.sError.Declare(String,"")
+	V.Local.sUsers.Declare(String,"")
+	V.Local.sEmails.Declare(String,"")
+	V.Local.sBody.Declare(String,"")
+	V.Local.sHeader.Declare(String,"")
+	V.Local.i.Declare(Long,0)
+	V.Local.sTemp.Declare(String,"")
+	V.Local.sSender.Declare(String,"")
+	V.Local.iSize.Declare(Long,0)
+	
+	F.Intrinsic.String.Replace(V.Ambient.CompanyName," ","",V.Local.sSender)
+	
+	F.Intrinsic.String.Build("{0}@NoReply.com",V.Local.sSender,V.Local.sSender)
+	
+	'Getting user from QAM Group.
+	F.Global.Security.GetGroupMembers("QAM",V.Caller.CompanyCode,V.Local.sUsers)
+	
+	F.Intrinsic.String.Split(V.Local.sUsers,"*!*",V.Local.sUsers)
+	
+	F.Intrinsic.Control.For(V.Local.i,0,V.Local.sUsers.UBound,1)
+		F.Intrinsic.Control.If(V.Local.sEmails(V.Local.sEmails.UBound).Trim,=,"")
+			F.Global.Security.GetUserEmail(V.Local.sUsers(V.Local.i).Trim,V.Caller.CompanyCode,V.Local.sTemp)
+			F.Intrinsic.Control.If(V.Local.sTemp.Trim,<>,"")
+				V.Local.sEmails(V.Local.sEmails.UBound).Set(V.Local.sTemp.Trim)
+			F.Intrinsic.Control.EndIf
+		F.Intrinsic.Control.Else
+			F.Global.Security.GetUserEmail(V.Local.sUsers(V.Local.i).Trim,V.Caller.CompanyCode,V.Local.sTemp)
+			F.Intrinsic.Math.Add(V.Local.sEmails(V.Local.sEmails.UBound).Length,V.Local.sTemp.Length,V.Local.iSize)
+			F.Intrinsic.Control.If(V.Local.iSize,<=,100)
+				F.Intrinsic.Control.If(V.Local.sTemp.Trim,<>,"")
+					F.Intrinsic.String.Build("{0},{1}",V.Local.sEmails(V.Local.sEmails.UBound),V.Local.sTemp.Trim,V.Local.sEmails(V.Local.sEmails.UBound))
+				F.Intrinsic.Control.EndIf
+			F.Intrinsic.Control.Else
+				F.Intrinsic.Math.Add(V.Local.sEmails.UBound,1,V.Local.iSize)
+				V.Local.sEmails.RedimPreserve(0,V.Local.iSize)
+				V.Local.sEmails(V.Local.sEmails.UBound).Set(V.Local.sTemp)
+			F.Intrinsic.Control.EndIf
+		F.Intrinsic.Control.EndIf
+	F.Intrinsic.Control.Next(V.Local.i)
+
+	V.Local.sHeader.Set("Vendor ISO Cert and Vendor Approval Reminder")
+	F.Intrinsic.Control.If(V.Args.ISO.Trim,<>,"")
+		F.Intrinsic.String.Build("List of Vendors with ISO Certs Expiration Date Expires within 60 days:{0}{1}{0}",V.Ambient.NewLine,V.Args.ISO,V.Local.sBody)
+	F.Intrinsic.Control.EndIf
+	
+	F.Intrinsic.Control.If(V.Args.App.Trim,<>,"")
+		F.Intrinsic.Control.If(V.Local.sBody.Trim,<>,"")
+			F.Intrinsic.String.Build("{0}{1}List of Vendors with Vendor Approval Expiration Date Expires within 60 days:{1}{2}{1}",V.Local.sBody,V.Ambient.NewLine,V.Args.App,V.Local.sBody)
+		F.Intrinsic.Control.Else
+			F.Intrinsic.String.Build("List of Vendors with Vendor Approval Expiration Date Expires within 60 days:{0}{1}{0}",V.Ambient.NewLine,V.Args.App,V.Local.sBody)
+		F.Intrinsic.Control.EndIf
+	F.Intrinsic.Control.EndIf
+	
+	F.Intrinsic.Control.If(V.Args.ISOExp.Trim,<>,"")
+		F.Intrinsic.Control.If(V.Local.sBody.Trim,<>,"")
+			F.Intrinsic.String.Build("{0}{1}List of Vendors with ISO Certs Expiration Date that has Expired:{1}{2}{1}",V.Local.sBody,V.Ambient.NewLine,V.Args.ISOExp,V.Local.sBody)
+		F.Intrinsic.Control.Else
+			F.Intrinsic.String.Build("List of Vendors with ISO Certs Expiration Date that has Expired:{0}{1}{0}",V.Ambient.NewLine,V.Args.ISOExp,V.Local.sBody)
+		F.Intrinsic.Control.EndIf
+	F.Intrinsic.Control.EndIf
+	
+	F.Intrinsic.Control.If(V.Args.AppExp.Trim,<>,"")
+		F.Intrinsic.Control.If(V.Local.sBody.Trim,<>,"")
+			F.Intrinsic.String.Build("{0}{1}List of Vendors with Vendor Approval Expiration Date that has Expired:{1}{2}",V.Local.sBody,V.Ambient.NewLine,V.Args.AppExp,V.Local.sBody)
+		F.Intrinsic.Control.Else
+			F.Intrinsic.String.Build("List of Vendors with Vendor Approval Expiration Date that has Expired:{0}{1}{0}",V.Ambient.NewLine,V.Args.AppExp,V.Local.sBody)
+		F.Intrinsic.Control.EndIf
+	F.Intrinsic.Control.EndIf
+	
+	F.Intrinsic.Control.If(V.Local.sBody.Trim,<>,"")
+		F.Intrinsic.Control.For(V.Local.i,0,V.Local.sEmails.UBound,1)
+			F.Global.Messaging.QueueMessage(V.Caller.CompanyCode,-1,"GCG_5538_Vendor_Service.g2u",V.Local.sHeader,V.Local.sSender,V.Local.sEmails(V.Local.i),V.Local.sBody)
+		F.Intrinsic.Control.Next(V.Local.i)
+	F.Intrinsic.Control.EndIf
+	
+	F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+		F.Intrinsic.String.Build("Project: {0}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}","",V.Ambient.NewLine,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Local.sError)
+		F.Intrinsic.UI.Msgbox(V.Local.sError)
+		F.Intrinsic.Control.CallSub(Exit)
+	F.Intrinsic.Control.EndIf
+Function.Intrinsic.Control.EndTry
+Program.Sub.Send_Email.End
