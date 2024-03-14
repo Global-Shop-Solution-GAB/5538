@@ -1,0 +1,438 @@
+﻿Program.Sub.ScreenSU.Start
+Gui.FormVendorExp..Create
+Gui.FormVendorExp..Caption("Vendor Expiration")
+Gui.FormVendorExp..Size(13695,11535)
+Gui.FormVendorExp..MinX(0)
+Gui.FormVendorExp..MinY(0)
+Gui.FormVendorExp..Position(0,0)
+Gui.FormVendorExp..BackColor(-2147483633)
+Gui.FormVendorExp..MousePointer(0)
+Gui.FormVendorExp..Event(UnLoad,FormVendorExp_UnLoad)
+Gui.FormVendorExp.GsGridControlVenExp.Create(GsGridControl)
+Gui.FormVendorExp.GsGridControlVenExp.Size(13350,9975)
+Gui.FormVendorExp.GsGridControlVenExp.Position(105,105)
+Gui.FormVendorExp.GsGridControlVenExp.Event(CellValueChanged,GsGridControlVenExp_CellValueChanged)
+Gui.FormVendorExp.cmdSave.Create(Button)
+Gui.FormVendorExp.cmdSave.Size(855,375)
+Gui.FormVendorExp.cmdSave.Position(120,10245)
+Gui.FormVendorExp.cmdSave.Caption("Save")
+Gui.FormVendorExp.cmdSave.Event(Click,cmdSave_Click)
+Program.Sub.ScreenSU.End
+
+Program.Sub.Preflight.Start
+V.Global.bUpdate.Declare(Boolean,False)
+V.Global.bExp.Declare(Boolean,False)
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+F.Intrinsic.Control.Try
+	V.Local.sError.Declare(String,"")
+
+	'checking if user has acess to update Vendor if False then user will only be able to view data.
+	F.Global.Security.CheckUserAccessIPM(2,1,V.Global.bUpdate)
+	
+	F.Global.Security.IsInGroup(V.Caller.User,"QAM",V.Caller.CompanyCode,V.Global.bExp)
+	
+	F.Intrinsic.Control.CallSub(SetContextMenu)
+	F.Intrinsic.Control.CallSub(Get_Data)
+	F.Intrinsic.Control.CallSub(Set_Properties)
+	
+	Gui.FormVendorExp..Show
+	
+	F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+		F.Intrinsic.String.Build("Project: {0}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}","GCG_5538_ISO_Expiration.g2u",V.Ambient.NewLine,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Local.sError)
+		F.Intrinsic.UI.Msgbox(V.Local.sError)
+		F.Intrinsic.Control.CallSub(FormVendorExp_UnLoad)
+	F.Intrinsic.Control.EndIf
+Function.Intrinsic.Control.EndTry
+Program.Sub.Main.End
+
+Program.Sub.FormVendorExp_UnLoad.Start
+F.Intrinsic.Control.Try
+	V.Local.sError.Declare(String,"")
+	V.Local.sDir.Declare
+	V.Local.sFile.Declare
+	V.Local.bRet.Declare
+	V.Local.sReturn.Declare
+	
+	F.Intrinsic.Control.If(V.ODBC.Con.Exists)
+		F.ODBC.Connection!con.Close
+	F.Intrinsic.Control.EndIf
+	
+	F.Intrinsic.String.Build("{0}\Custom\5538",V.Caller.GlobalDir,V.Local.sDir)
+	F.Intrinsic.String.Build("{0}\{1}_5538_ISO_Expiration.txt",V.Local.sDir,V.Caller.User,V.Local.sFile)
+	
+	F.Intrinsic.File.DirExists(V.Local.sDir,V.Local.bRet)
+	
+	F.Intrinsic.Control.If(V.Local.bRet,=,False)
+		F.Intrinsic.File.CreateDir(V.Local.sDir)
+	F.Intrinsic.Control.EndIf
+	
+	Gui.FormVendorExp.GsGridControlVenExp.Serialize("GExp",V.Local.sReturn)
+	
+	F.Intrinsic.File.String2File(V.Local.sFile,V.Local.sReturn)
+
+	F.Intrinsic.Control.End
+	
+	F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+		F.Intrinsic.String.Build("Project: {0}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}","GCG_5538_ISO_Expiration.g2u",V.Ambient.NewLine,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Local.sError)
+		F.Intrinsic.UI.Msgbox(V.Local.sError)
+		F.Intrinsic.Control.End
+	F.Intrinsic.Control.EndIf
+Function.Intrinsic.Control.EndTry
+Program.Sub.FormVendorExp_UnLoad.End
+
+Program.Sub.Get_Data.Start
+F.Intrinsic.Control.Try
+	V.Local.sError.Declare(String,"")
+	V.Local.sSql.Declare(String,"")
+	' where Approved_Sup_Dt <> '1900-01-01' or ISO_Cert_Date <> '1900-01-01'
+	V.Local.sSql.Set("Select a.Vendor, a.Name_Vendor, ISO_Status, ISO_Cert_Date, ISO_Expiration, Approved_Suppl, Approved_Sup_Dt, App_Expiration, Scope From V_Vendor_Master a Left Join V_Vendor_Addl b on a.Vendor = b.Vendor Left Join GCG_5538_Vendor_Exp c on a.Vendor = c.Vendor;")
+	F.ODBC.Connection!Con.OpenCompanyConnection
+	F.Data.DataTable.CreateFromSQL("Exp","con",V.Local.sSql,True)
+	F.Data.DataView.Create("Exp","VExp",22,"ISO_Expiration = #1/1/1900#","")
+	F.Data.DataView.SetValue("Exp","VExp",-1,"ISO_Expiration",V.Ambient.DBNull)
+	F.Data.DataView.SetFilter("Exp","VExp","ISO_Cert_Date = #1/1/1900#")
+	F.Data.DataView.SetValue("Exp","VExp",-1,"ISO_Cert_Date",V.Ambient.DBNull)
+	F.Data.DataView.SetFilter("Exp","VExp","App_Expiration = #1/1/1900#")
+	F.Data.DataView.SetValue("Exp","VExp",-1,"App_Expiration",V.Ambient.DBNull)
+	F.Data.DataView.SetFilter("Exp","VExp","Approved_Sup_Dt = #1/1/1900#")
+	F.Data.DataView.SetValue("Exp","VExp",-1,"Approved_Sup_Dt",V.Ambient.DBNull)
+	F.Data.DataView.Close("Exp","VExp")
+	
+	F.ODBC.Connection!Con.Close
+	
+	F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+		F.Intrinsic.String.Build("Project: {0}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}","GCG_5538_ISO_Expiration.g2u",V.Ambient.NewLine,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Local.sError)
+		F.Intrinsic.UI.Msgbox(V.Local.sError)
+		F.Intrinsic.Control.CallSub(FormVendorExp_UnLoad)
+	F.Intrinsic.Control.EndIf
+Function.Intrinsic.Control.EndTry
+Program.Sub.Get_Data.End
+
+Program.Sub.Set_Properties.Start
+F.Intrinsic.Control.Try
+	V.Local.sError.Declare(String,"")
+	V.Local.sReturn.Declare(String,"")
+	V.Local.sReturn2.Declare
+	V.Local.sFile.Declare
+	V.Local.bRet.Declare
+	
+	F.Intrinsic.Control.If(V.Global.bUpdate,=,True,"OR",V.Global.bExp,=,True)
+		Gui.FormVendorExp.GsGridControlVenExp.Size(13350,10155)
+		Gui.FormVendorExp.cmdSave.Visible(True)
+	F.Intrinsic.Control.Else
+		Gui.FormVendorExp.GsGridControlVenExp.Size(13350,10635)
+		Gui.FormVendorExp.cmdSave.Visible(False)
+	F.Intrinsic.Control.EndIf
+
+	Gui.FormVendorExp.GsGridControlVenExp.Anchor(15)
+	Gui.FormVendorExp.cmdSave.Anchor(6)
+	
+	Gui.FormVendorExp.GsGridControlVenExp.AddGridviewFromDatatable("GExp","Exp")
+
+	Gui.FormVendorExp.GsGridControlVenExp.SetGridviewProperty("GExp","OptionsSelectionEnableAppearanceFocusedRow",False)
+	Gui.FormVendorExp.GsGridControlVenExp.SetGridviewProperty("GExp","Enableappearanceoddrow",True)
+	
+	Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","Vendor","ReadOnly",True)
+	Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","Vendor","AllowEdit",False)
+'	Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","Vendor","HeaderBackColor","Green")
+'	Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","Vendor","HeaderForeColor","White")
+	Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","Vendor","MaxWidth",60)
+	Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","Vendor","MinWidth",60)
+	
+	Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","Name_Vendor","ReadOnly",True)
+	Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","Name_Vendor","AllowEdit",False)
+'	Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","Name_Vendor","HeaderBackColor","Green")
+'	Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","Name_Vendor","HeaderForeColor","White")
+	Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","Name_Vendor","Caption","Vendor Name")
+	Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","Name_Vendor","MaxWidth",200)
+	Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","Name_Vendor","MinWidth",200)
+	
+	Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","ISO_Status","ReadOnly",True)
+	Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","ISO_Status","AllowEdit",False)
+'	Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","ISO_Status","HeaderBackColor","Green")
+'	Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","ISO_Status","HeaderForeColor","White")
+	Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","ISO_Status","Caption","Certification Status")
+	Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","ISO_Status","Visible",False)
+	Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","ISO_Status","MaxWidth",60)
+	Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","ISO_Status","MinWidth",60)
+	
+	F.Intrinsic.Control.If(V.Global.bUpdate,=,True)
+		Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","ISO_Cert_Date","ReadOnly",False)
+		Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","ISO_Cert_Date","AllowEdit",True)
+	F.Intrinsic.Control.Else
+		Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","ISO_Cert_Date","ReadOnly",True)
+		Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","ISO_Cert_Date","AllowEdit",False)
+	F.Intrinsic.Control.EndIf
+	
+'	Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","ISO_Cert_Date","HeaderBackColor","Green")
+'	Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","ISO_Cert_Date","HeaderForeColor","White")
+	Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","ISO_Cert_Date","Caption","Certification Cert Date")
+	Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","ISO_Cert_Date","DisplayCustomDatetime","d")
+	Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","ISO_Cert_Date","MaxWidth",135)
+	Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","ISO_Cert_Date","MinWidth",135)
+	
+	F.Intrinsic.Control.If(V.Global.bExp,=,True)
+		Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","ISO_Expiration","ReadOnly",False)
+		Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","ISO_Expiration","AllowEdit",True)
+	F.Intrinsic.Control.Else
+		Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","ISO_Expiration","ReadOnly",True)
+		Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","ISO_Expiration","AllowEdit",False)
+	F.Intrinsic.Control.EndIf
+	
+'	Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","ISO_Expiration","HeaderBackColor","Green")
+'	Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","ISO_Expiration","HeaderForeColor","White")
+	Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","ISO_Expiration","Caption","Certification Expiration Date")
+	Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","ISO_Expiration","DisplayCustomDatetime","d")
+	Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","ISO_Expiration","MaxWidth",135)
+	Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","ISO_Expiration","MinWidth",135)
+	
+	Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","Approved_Suppl","ReadOnly",True)
+	Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","Approved_Suppl","AllowEdit",False)
+'	Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","Approved_Suppl","HeaderBackColor","Green")
+'	Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","Approved_Suppl","HeaderForeColor","White")
+	Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","Approved_Suppl","Caption","Vendor Approved")
+	Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","Approved_Suppl","Visible",False)
+	Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","Approved_Suppl","MaxWidth",95)
+	Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","Approved_Suppl","MinWidth",95)
+	
+	F.Intrinsic.Control.If(V.Global.bUpdate,=,True)
+		Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","Approved_Sup_Dt","ReadOnly",False)
+		Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","Approved_Sup_Dt","AllowEdit",True)
+	F.Intrinsic.Control.Else
+		Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","Approved_Sup_Dt","ReadOnly",True)
+		Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","Approved_Sup_Dt","AllowEdit",False)
+	F.Intrinsic.Control.EndIf
+	
+'	Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","Approved_Sup_Dt","HeaderBackColor","Green")
+'	Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","Approved_Sup_Dt","HeaderForeColor","White")
+	Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","Approved_Sup_Dt","Caption","Vendor Approved Date")
+	Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","Approved_Sup_Dt","DisplayCustomDatetime","d")
+	Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","Approved_Sup_Dt","MaxWidth",135)
+	Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","Approved_Sup_Dt","MinWidth",135)
+	
+	F.Intrinsic.Control.If(V.Global.bExp,=,True)
+		Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","App_Expiration","ReadOnly",False)
+		Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","App_Expiration","AllowEdit",True)
+	F.Intrinsic.Control.Else
+		Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","App_Expiration","ReadOnly",True)
+		Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","App_Expiration","AllowEdit",False)
+	F.Intrinsic.Control.EndIf
+	
+'	Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","App_Expiration","HeaderBackColor","Green")
+'	Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","App_Expiration","HeaderForeColor","White")
+	Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","App_Expiration","Caption","Approved Expiration Date")
+	Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","App_Expiration","DisplayCustomDatetime","d")
+	Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","App_Expiration","MaxWidth",135)
+	Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","App_Expiration","MinWidth",135)
+	
+	F.Intrinsic.Control.If(V.Global.bExp,=,True)
+		Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","Scope","ReadOnly",False)
+		Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","Scope","AllowEdit",True)
+	F.Intrinsic.Control.Else
+		Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","Scope","ReadOnly",True)
+		Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","Scope","AllowEdit",False)
+	F.Intrinsic.Control.EndIf
+	
+'	Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","Scope","HeaderBackColor","Green")
+'	Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","Scope","HeaderForeColor","White")
+	Gui.FormVendorExp.GsGridControlVenExp.SetColumnProperty("GExp","Scope","Caption","Scope")
+	
+	F.Intrinsic.String.Build("[ISO_Expiration] < #{0}#",V.Ambient.Date,V.Local.sReturn)
+	Gui.FormVendorExp.GsGridControlVenExp.AddStyleFormatCondition("GExp","ISO_Expiration","ParentRed","Expression",V.Local.sReturn)
+	Gui.FormVendorExp.GsGridControlVenExp.SetStyleFormatConditionProperty("GExp","ISO_Expiration","ParentRed","BackColor","#fd6464")
+	
+	F.Intrinsic.String.Build("[ISO_Cert_Date] > #1/1/1900# and [ISO_Expiration] >= #{0}#",V.Ambient.Date,V.Local.sReturn)
+	Gui.FormVendorExp.GsGridControlVenExp.AddStyleFormatCondition("GExp","ISO_Cert_Date","ParentGreen","Expression",V.Local.sReturn)
+	Gui.FormVendorExp.GsGridControlVenExp.SetStyleFormatConditionProperty("GExp","ISO_Cert_Date","ParentGreen","BackColor","#64fd64")
+	
+	F.Intrinsic.String.Build("[ISO_Cert_Date] = '' or isnull([ISO_Cert_Date]) or [ISO_Expiration] < #{0}#",V.Ambient.Date,V.Local.sReturn)
+	Gui.FormVendorExp.GsGridControlVenExp.AddStyleFormatCondition("GExp","ISO_Cert_Date","ParentRed","Expression",V.Local.sReturn)
+	Gui.FormVendorExp.GsGridControlVenExp.SetStyleFormatConditionProperty("GExp","ISO_Cert_Date","ParentRed","BackColor","#fd6464")
+	
+	F.Intrinsic.String.Build("[ISO_Expiration] >= #{0}#",V.Ambient.Date,V.Local.sReturn)
+	Gui.FormVendorExp.GsGridControlVenExp.AddStyleFormatCondition("GExp","ISO_Expiration","ParentGreen","Expression",V.Local.sReturn)
+	Gui.FormVendorExp.GsGridControlVenExp.SetStyleFormatConditionProperty("GExp","ISO_Expiration","ParentGreen","BackColor","#64fd64")
+	
+	F.Intrinsic.String.Build("[App_Expiration] < #{0}#",V.Ambient.Date,V.Local.sReturn)
+	Gui.FormVendorExp.GsGridControlVenExp.AddStyleFormatCondition("GExp","App_Expiration","ParentRed","Expression",V.Local.sReturn)
+	Gui.FormVendorExp.GsGridControlVenExp.SetStyleFormatConditionProperty("GExp","App_Expiration","ParentRed","BackColor","#fd6464")
+	
+	F.Intrinsic.String.Build("[Approved_Sup_Dt] > #1/1/1900# and [App_Expiration] >= #{0}#",V.Ambient.Date,V.Local.sReturn)
+	Gui.FormVendorExp.GsGridControlVenExp.AddStyleFormatCondition("GExp","Approved_Sup_Dt","ParentGreen","Expression",V.Local.sReturn)
+	Gui.FormVendorExp.GsGridControlVenExp.SetStyleFormatConditionProperty("GExp","Approved_Sup_Dt","ParentGreen","BackColor","#64fd64")
+	
+	F.Intrinsic.String.Build("[Approved_Sup_Dt] = '' or isnull([Approved_Sup_Dt]) or [App_Expiration] < #{0}#",V.Ambient.Date,V.Local.sReturn)
+	Gui.FormVendorExp.GsGridControlVenExp.AddStyleFormatCondition("GExp","Approved_Sup_Dt","ParentRed","Expression",V.Local.sReturn)
+	Gui.FormVendorExp.GsGridControlVenExp.SetStyleFormatConditionProperty("GExp","Approved_Sup_Dt","ParentRed","BackColor","#fd6464")
+	
+	F.Intrinsic.String.Build("[App_Expiration] >= #{0}#",V.Ambient.Date,V.Local.sReturn)
+	Gui.FormVendorExp.GsGridControlVenExp.AddStyleFormatCondition("GExp","App_Expiration","ParentGreen","Expression",V.Local.sReturn)
+	Gui.FormVendorExp.GsGridControlVenExp.SetStyleFormatConditionProperty("GExp","App_Expiration","ParentGreen","BackColor","#64fd64")	
+	
+	Gui.FormVendorExp.GsGridControlVenExp.MainView("GExp")
+	
+	F.Intrinsic.String.Build("{0}\Custom\5538\{1}_5538_ISO_Expiration.txt",V.Caller.GlobalDir,V.Caller.User,V.Local.sFile)
+
+	F.Intrinsic.File.Exists(V.Local.sFile,V.Local.bRet)
+	F.Intrinsic.Control.If(V.Local.bRet)
+		F.Intrinsic.File.File2String(V.Local.sFile,V.Local.sReturn2)
+		F.Intrinsic.Control.If(V.Local.sReturn2.Trim,=,"")
+		F.Intrinsic.Control.Else
+			Gui.FormVendorExp.GsGridControlVenExp.Deserialize(V.Local.sReturn2)
+		F.Intrinsic.Control.EndIf
+		
+	F.Intrinsic.Control.EndIf
+	
+	F.Intrinsic.Control.If(V.Caller.GSSVersion,>,2020.1)
+		Gui.FormVendorExp.GsGridControlVenExp.SetGridviewProperty("GExp","ShowConditionalFormattingItem",True)
+	F.Intrinsic.Control.EndIf
+	
+	F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+		F.Intrinsic.String.Build("Project: {0}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}","GCG_5538_ISO_Expiration.g2u",V.Ambient.NewLine,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Local.sError)
+		F.Intrinsic.UI.Msgbox(V.Local.sError)
+		F.Intrinsic.Control.CallSub(FormVendorExp_UnLoad)
+	F.Intrinsic.Control.EndIf
+Function.Intrinsic.Control.EndTry
+Program.Sub.Set_Properties.End
+
+Program.Sub.GsGridControlVenExp_CellValueChanged.Start
+F.Intrinsic.Control.Try
+	V.Local.sError.Declare(String,"")
+	
+	F.Intrinsic.Control.SelectCase(V.Args.Column.UCase)
+		F.Intrinsic.Control.Case("APPROVED_SUP_DT")
+			F.Intrinsic.Control.If(V.Args.Value,<>,"")
+				F.Data.DataTable.SetValue("Exp",V.Args.RowIndex,"Approved_Suppl","Y")
+			F.Intrinsic.Control.Else
+				F.Data.DataTable.SetValue("Exp",V.Args.RowIndex,"Approved_Suppl","")
+			F.Intrinsic.Control.EndIf	
+		
+		F.Intrinsic.Control.Case("ISO_CERT_DATE")
+			F.Intrinsic.Control.If(V.Args.Value,<>,"")
+				F.Data.DataTable.SetValue("Exp",V.Args.RowIndex,"ISO_Status","Y")
+			F.Intrinsic.Control.Else
+				F.Data.DataTable.SetValue("Exp",V.Args.RowIndex,"ISO_Status","")
+			F.Intrinsic.Control.EndIf		
+			
+	F.Intrinsic.Control.EndSelect
+	
+	F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+		F.Intrinsic.String.Build("Project: {0}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}","GCG_5538_ISO_Expiration.g2u",V.Ambient.NewLine,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Local.sError)
+		F.Intrinsic.UI.Msgbox(V.Local.sError)
+		F.Intrinsic.Control.CallSub(FormVendorExp_UnLoad)
+	F.Intrinsic.Control.EndIf
+Function.Intrinsic.Control.EndTry
+Program.Sub.GsGridControlVenExp_CellValueChanged.End
+
+Program.Sub.cmdSave_Click.Start
+F.Intrinsic.Control.Try
+	V.Local.sError.Declare(String,"")
+	V.Local.i.Declare(Long,0)
+	V.Local.sAppDate.Declare(String,"")
+	V.Local.sICODate.Declare(String,"")
+	V.Local.sSql.Declare(String,"")
+	
+	F.ODBC.Connection!Con.OpenCompanyConnection
+	
+	F.Intrinsic.UI.InvokeWaitDialog("Saving Vendor Data.................")
+	
+	F.Intrinsic.Control.If(V.Global.bExp,=,True)
+		F.Data.DataTable.SaveToDB("Exp","con","GCG_5538_Vendor_Exp","Vendor",256,"Vendor@!@Vendor*!*ISO_Expiration@!@ISO_Expiration*!*App_Expiration@!@App_Expiration*!*Scope@!@Scope")
+	F.Intrinsic.Control.EndIf
+
+	F.Intrinsic.Control.For(V.Local.i,0,V.DataTable.Exp.RowCount--,1)
+'	F.Data.DataTable.SaveToDB("Exp","con","V_Vendor_Addl","Vendor",256,"Vendor@!@Vendor*!*Approved_Suppl@!@Approved_Suppl*!*ISO_Status@!@ISO_Status*!*ISO_Cert_Date@!@ISO_Cert_Date*!*Approved_Sup_Dt@!@Approved_Sup_Dt")
+		F.Intrinsic.String.Format(v.DataTable.Exp(v.Local.i).Approved_Sup_Dt!FieldVal,"YYYYMMDD",V.Local.sAppDate)
+		F.Intrinsic.String.Format(v.DataTable.Exp(v.Local.i).ISO_Cert_Date!FieldVal,"YYYYMMDD",V.Local.sICODate)
+		
+		F.Intrinsic.String.Build("Update Vendor_Addl Set Approved_Sup_Dt = '{0}', ISO_Cert_Date = '{1}', Approved_Suppl = '{2}', ISO_Status = '{3}' Where Vendor = '{4}' and Rec = '3'",V.Local.sAppDate,V.Local.sICODate,v.DataTable.Exp(v.Local.i).Approved_Suppl!FieldValTrim,v.DataTable.Exp(v.Local.i).ISO_Status!FieldValTrim,v.DataTable.Exp(v.Local.i).Vendor!FieldValTrim,V.Local.sSql)
+		F.ODBC.Connection!Con.Execute (V.Local.sSql)
+	F.Intrinsic.Control.Next(V.Local.i)
+	
+	F.Intrinsic.UI.CloseWaitDialog
+	
+	F.ODBC.Connection!Con.Close
+	
+	F.Data.DataTable.AcceptChanges("Exp")
+	
+	F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+		F.Intrinsic.String.Build("Project: {0}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}","GCG_5538_ISO_Expiration.g2u",V.Ambient.NewLine,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Local.sError)
+		F.Intrinsic.UI.Msgbox(V.Local.sError)
+		F.Intrinsic.Control.CallSub(FormVendorExp_UnLoad)
+	F.Intrinsic.Control.EndIf
+Function.Intrinsic.Control.EndTry
+Program.Sub.cmdSave_Click.End
+
+Program.Sub.SetContextMenu.Start
+V.Local.sError.Declare
+F.Intrinsic.Control.Try
+
+	Gui.FormVendorExp..ContextMenuCreate("ctxAll")
+	Gui.FormVendorExp.GsGridControlVenExp.ContextMenuAttach("ctxAll")
+	Gui.FormVendorExp..ContextMenuAddItem("ctxAll","RefreshPermissions",0,"Refresh Permissions")
+	Gui.FormVendorExp..ContextMenuSetItemEventHandler("ctxAll","RefreshPermissions","RefreshPermissions")
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}", V.Ambient.ScriptPath, V.Ambient.Newline, V.Ambient.CurrentSubroutine, V.Ambient.ErrorNumber, V.Ambient.ErrorDescription, V.Ambient.GABVersion, V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.End
+F.Intrinsic.Control.EndTry
+Program.Sub.SetContextMenu.End
+
+Program.Sub.RefreshPermissions.Start
+V.Local.sError.Declare
+V.Local.sDir.Declare
+V.Local.sFile.Declare
+V.Local.bRet.Declare
+F.Intrinsic.Control.Try
+
+	F.Intrinsic.Control.BlockEvents
+
+	F.Intrinsic.String.Build("{0}\Custom\5538",V.Caller.GlobalDir,V.Local.sDir)
+	F.Intrinsic.String.Build("{0}\{1}_5538_ISO_Expiration.txt",V.Local.sDir,V.Caller.User,V.Local.sFile)
+	
+	F.Intrinsic.File.DirExists(V.Local.sDir,V.Local.bRet)
+	
+	F.Intrinsic.Control.If(V.Local.bRet,=,False)
+		F.Intrinsic.File.CreateDir(V.Local.sDir)
+	F.Intrinsic.Control.EndIf
+	
+	F.Intrinsic.File.String2File(V.Local.sFile,"")
+	
+	F.Intrinsic.Control.UnBlockEvents
+	
+	F.Intrinsic.Control.CallSub(Set_Properties)
+	
+	F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("Project: {0}{1}{1}Subroutine: {2}{1}Error Occurred {3} with description {4}{1}{1}GAB Version: {5}", V.Ambient.ScriptPath, V.Ambient.Newline, V.Ambient.CurrentSubroutine, V.Ambient.ErrorNumber, V.Ambient.ErrorDescription, V.Ambient.GABVersion, V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.End
+F.Intrinsic.Control.EndTry
+Program.Sub.RefreshPermissions.End
+
+Program.Sub.Comments.Start
+${$5$}$2.0.0.0$}$2
+${$6$}$rking$}$20231005072743572$}$QNdZLVy4bWuiWa9jh1ZTiKHvMPldSPXe/KTK7teTLvI2zbVvwaqKkjWPVLdfDEsek6TOVPNUeBs=
+Program.Sub.Comments.End
